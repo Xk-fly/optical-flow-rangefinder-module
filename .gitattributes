@@ -1,0 +1,2 @@
+# Preserve imported project files without Git EOL normalization.
+* -text
