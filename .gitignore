@@ -1,0 +1,35 @@
+# Generated firmware build outputs
+Build/
+Debug/
+Release/
+build/
+cmake-build-*/
+
+# Firmware artifacts
+*.o
+*.d
+*.elf
+*.map
+*.hex
+*.bin
+
+# Python/tool runtime files
+__pycache__/
+*.pyc
+
+# Captured bench logs
+logs/
+
+# Editor and OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local AI/agent workspaces
+.hermes/
+.agents/
+
+# Temporary files
+*.tmp
+*.bak
