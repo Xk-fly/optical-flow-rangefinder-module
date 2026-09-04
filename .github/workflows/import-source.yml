@@ -1,0 +1,75 @@
+name: One-time source import
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/import-source.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct clean source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          OVERLAY="$RUNNER_TEMP/custom_overlay.tar.gz"
+          UPSTREAM="$RUNNER_TEMP/upstream"
+          WORK="$RUNNER_TEMP/reconstructed"
+
+          base64 --decode _import/custom_overlay.b64 > "$OVERLAY"
+          echo "993192d7f391120ff1ea39b8fc7aed314449588d52098305799c3c89596486e7  $OVERLAY" | sha256sum -c -
+
+          git clone --depth 1 https://github.com/NanoNM/F_Flow-01.git "$UPSTREAM"
+          mkdir -p "$WORK"
+
+          cp -a "$UPSTREAM/Core" "$WORK/"
+          cp -a "$UPSTREAM/Drivers" "$WORK/"
+          cp -a "$UPSTREAM/.cproject" "$WORK/"
+          cp -a "$UPSTREAM/.mxproject" "$WORK/"
+          cp -a "$UPSTREAM/.project" "$WORK/"
+          cp -a "$UPSTREAM/.settings" "$WORK/"
+          cp -a "$UPSTREAM/STM32G030F6P6TR Debug.launch" "$WORK/"
+          cp -a "$UPSTREAM/STM32G030F6P6TR.ioc" "$WORK/"
+          cp -a "$UPSTREAM/STM32G030F6PX_FLASH.ld" "$WORK/"
+          cp -a "$UPSTREAM/LICENSE" "$WORK/"
+
+          tar -xzf "$OVERLAY" -C "$WORK"
+
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a "$WORK"/. .
+
+      - name: Verify imported source
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo 'd884fdbf70f12928e4f845a5a47015d1f9f4cbb066ae13312f4b920fbdfc5990  Core/Src/main.c' | sha256sum -c -
+          echo 'f7b33231ef597ac4a1fe4a1419b4faab7b36a2280f2e0d5a0397e2322c21bdd7  Core/Src/PMW3901MB/pmw_3901.c' | sha256sum -c -
+          echo '51cd968f02aa5cbc85bbcaa1d7d00507a1a6b3c65eb3dc12381d3717f665c129  Core/Src/Adapter/massage_adapter.c' | sha256sum -c -
+          echo 'f8fc25404a22425937778538d92d4f364d2e3faef012a2747b174633891d5d53  STM32G030F6P6TR.ioc' | sha256sum -c -
+          echo '8ca7feb9ab557085536928314cfcb4fd6fb89364e3c9f3516edbe5e3ddfdd0ab  光流模块原理图和PCB/光流原理图与PCB整体.epro' | sha256sum -c -
+
+          python tools/verify_pmw3901_driver.py
+          python tools/verify_production_firmware.py
+          python tools/test_monitor_mavlink_serial.py
+
+      - name: Commit reconstructed repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: import optical flow rangefinder module source'
+          git push origin HEAD:main
