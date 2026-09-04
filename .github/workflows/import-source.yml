@@ -23,12 +23,15 @@ jobs:
         run: |
           set -euo pipefail
 
+          OVERLAY_B64="$RUNNER_TEMP/custom_overlay.b64"
           OVERLAY="$RUNNER_TEMP/custom_overlay.tar.gz"
           UPSTREAM="$RUNNER_TEMP/upstream"
           WORK="$RUNNER_TEMP/reconstructed"
 
-          base64 --decode _import/custom_overlay.b64 > "$OVERLAY"
-          echo "993192d7f391120ff1ea39b8fc7aed314449588d52098305799c3c89596486e7  $OVERLAY" | sha256sum -c -
+          cat _import/parts/part-* > "$OVERLAY_B64"
+          echo "f9672cb3e5df715b987eb9c4ce976b77e315b831495d5879ce5160b7df36747f  $OVERLAY_B64" | sha256sum -c -
+          base64 --decode "$OVERLAY_B64" > "$OVERLAY"
+          echo "5c471e1164603f5cb3d8e9c9c8851b5a1d9e9a83b06202240f7f5d64683ef269  $OVERLAY" | sha256sum -c -
 
           git clone --depth 1 https://github.com/NanoNM/F_Flow-01.git "$UPSTREAM"
           mkdir -p "$WORK"
