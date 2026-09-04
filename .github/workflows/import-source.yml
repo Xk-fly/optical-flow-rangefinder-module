@@ -28,6 +28,18 @@ jobs:
           UPSTREAM="$RUNNER_TEMP/upstream"
           WORK="$RUNNER_TEMP/reconstructed"
 
+          echo '802fdd22b867df1b68d7338aba2ac98412f99b0b11a2148021024d5b7071d3dd  _import/parts/part-00' | sha256sum -c -
+          echo '250c245b5d5e8afb0113287a35d49f9d065667ea8c019adbfee3ee53ae1719bf  _import/parts/part-01' | sha256sum -c -
+          echo '075d95d32ced5aabffa8b45506a9c0fd2402df7311c5ed9b7506e9dcaeb0fb85  _import/parts/part-02' | sha256sum -c -
+          echo '58842f5b05af71f7c2dd9123a8f182d6bc33c858fbe75cab810abfb64adacd95  _import/parts/part-03' | sha256sum -c -
+          echo '2fbfec8b65d437441d6b9c3cdfe25faa199087700f781aa8f1e8384614c3d627  _import/parts/part-04' | sha256sum -c -
+          echo 'f2628c4447e098ef4a1b79752b1167df3d65c209dde3c52d778ecf516dba4ce3  _import/parts/part-05' | sha256sum -c -
+          echo 'd9945901beb2b7b1406e9d7644e8210ce3dd1bc87016f52968f923705f4ec9dc  _import/parts/part-06' | sha256sum -c -
+          echo '6f4700c9695f2f77fd53d8e53e47a3c1fa28ebc24f087d7c8456d068487ef75c  _import/parts/part-07' | sha256sum -c -
+          echo 'abe2883332f1999289cab0163041d7e09e1884c16ad7891af88ffa0c435de11b  _import/parts/part-08' | sha256sum -c -
+          echo '9fe3554833d0a0d1634731363099c7b84349180b35f9bd15fa71acf0dd71c332  _import/parts/part-09' | sha256sum -c -
+          echo 'cec87a41a3b2e1a586e878db192b9b37203c8a5c347044b5e9a63003447d12e7  _import/parts/part-10' | sha256sum -c -
+
           cat _import/parts/part-* > "$OVERLAY_B64"
           echo "f9672cb3e5df715b987eb9c4ce976b77e315b831495d5879ce5160b7df36747f  $OVERLAY_B64" | sha256sum -c -
           base64 --decode "$OVERLAY_B64" > "$OVERLAY"
