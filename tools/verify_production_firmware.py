@@ -11,6 +11,7 @@ ADAPTER = (ROOT / "Core/Src/Adapter/massage_adapter.c").read_text(encoding="utf-
 MAIN = (ROOT / "Core/Src/main.c").read_text(encoding="utf-8")
 DRIVER = (ROOT / "Core/Src/PMW3901MB/pmw_3901.c").read_text(encoding="utf-8")
 VL53 = (ROOT / "Core/Inc/VL53L1X/vl53l1x.c").read_text(encoding="utf-8")
+VL53_HEADER = (ROOT / "Core/Inc/VL53L1X/vl53l1x.h").read_text(encoding="utf-8")
 
 
 class ProductionFirmwareContractTests(unittest.TestCase):
@@ -33,8 +34,21 @@ class ProductionFirmwareContractTests(unittest.TestCase):
         self.assertIn("uint8_t vl53_GetDistance(uint16_t *distance_mm)", VL53)
         self.assertNotIn("while (dataReady == 0)", VL53)
         self.assertIn("VL53L1X_ClearInterrupt", VL53)
-        self.assertIn("vl53_GetDistance(&distance)", MAIN)
-        self.assertIn("if (distance_valid != 0U)", MAIN)
+        self.assertIn("vl53_GetDistance(&new_distance)", MAIN)
+        self.assertIn("if (vl53_ok &&", MAIN)
+
+    def test_range_filter_and_optical_flow_share_one_freshness_timeout(self):
+        self.assertIn("#define VL53_DISTANCE_FRESH_TIMEOUT_MS 300U", VL53_HEADER)
+        self.assertIn("#define VL53_MIN_DISTANCE_MM  50U", VL53)
+        self.assertIn("#define VL53_MAX_DISTANCE_MM  3600U", VL53)
+        self.assertIn("VL53Median3Filter_Update", VL53)
+        self.assertIn("VL53_DISTANCE_FRESH_TIMEOUT_MS", VL53)
+        self.assertIn("VL53_DISTANCE_FRESH_TIMEOUT_MS", MAIN)
+        self.assertNotIn("#define DISTANCE_FRESH_TIMEOUT_MS", MAIN)
+        self.assertIn("uint8_t has_distance = 0U;", MAIN)
+        self.assertIn("(has_distance != 0U)", MAIN)
+        self.assertIn("last_distance_update_ms = HAL_GetTick();", MAIN)
+        self.assertNotIn("last_distance_update_ms = now;", MAIN)
 
     def test_real_range_is_encoded_in_both_mavlink_messages(self):
         self.assertIn("uint8_t distance_valid", ADAPTER)

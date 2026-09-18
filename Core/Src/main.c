@@ -39,7 +39,6 @@
 #define PMW_SCALE_PER_MILLE             3000U
 #define FLOW_PERIOD_MS                  20U
 #define DISTANCE_PERIOD_MS              100U
-#define DISTANCE_FRESH_TIMEOUT_MS       300U
 #define HEARTBEAT_PERIOD_MS             1000U
 #define PMW3901_ENABLE_PERIODIC_DIAGNOSTICS 0U
 #if PMW3901_ENABLE_PERIODIC_DIAGNOSTICS
@@ -378,7 +377,7 @@ int main(void)
   uint32_t last_diag_ms = scheduler_start_ms;
 #endif
   uint16_t distance = 0U;
-  uint8_t distance_valid = 0U;
+  uint8_t has_distance = 0U;
   uint32_t last_distance_update_ms = 0U;
 
   while (1) {
@@ -413,8 +412,8 @@ int main(void)
 		  if (pmw_ok) {
 			  pollingMotion(&x, &y, &quality, PMW_SCALE_PER_MILLE);
 		  }
-		  uint8_t distance_fresh = (distance_valid != 0U) &&
-		                           ((now - last_distance_update_ms) <= DISTANCE_FRESH_TIMEOUT_MS);
+		  uint8_t distance_fresh = (has_distance != 0U) &&
+		                           ((now - last_distance_update_ms) <= VL53_DISTANCE_FRESH_TIMEOUT_MS);
 		  send_optical_flow(&huart2, x, y, quality, distance, distance_fresh);
 	  }
 
@@ -423,8 +422,8 @@ int main(void)
 		  last_distance_ms = now;
 		  if (vl53_ok && (vl53_GetDistance(&new_distance) != 0U)) {
 			  distance = new_distance;
-			  distance_valid = 1U;
-			  last_distance_update_ms = now;
+			  has_distance = 1U;
+			  last_distance_update_ms = HAL_GetTick();
 			  send_distance_sensor(&huart2, distance);
 		  }
 	  }
