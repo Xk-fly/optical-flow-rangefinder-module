@@ -1,0 +1,88 @@
+name: build F-Flow ground bootstrap
+
+on:
+  push:
+    branches:
+      - feature/vl53-ground-bootstrap
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-f-flow-ground-bootstrap-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-22.04
+    container: ardupilot/ardupilot-dev-chibios:v0.1.3
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Configure ARM toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          echo "/opt/gcc-arm-none-eabi-10/bin" >> "${GITHUB_PATH}"
+
+      - name: Show tool versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 --version
+          gcc --version | sed -n '1p'
+          make --version | sed -n '1p'
+          arm-none-eabi-gcc --version | sed -n '1p'
+
+      - name: Run source regression checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/verify_pmw3901_driver.py
+          python3 tools/verify_production_firmware.py
+          python3 tools/test_monitor_mavlink_serial.py
+          bash tools/test-vl53-median-filter.sh
+          bash tools/test-vl53-ground-bootstrap.sh
+
+      - name: Clean build STM32G030 firmware
+        shell: bash
+        run: |
+          set -euo pipefail
+          make BUILD_DIR=build-ci clean
+          make BUILD_DIR=build-ci -j2 all
+
+      - name: Record build metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build-artifact
+          cp build-ci/STM32G030F6P6TR.hex build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.hex
+          cp build-ci/STM32G030F6P6TR.bin build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.bin
+          cp build-ci/STM32G030F6P6TR.elf build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.elf
+          cp build-ci/STM32G030F6P6TR.map build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.map
+          {
+            echo "branch=${GITHUB_REF_NAME}"
+            echo "commit=${GITHUB_SHA}"
+            echo "target=STM32G030F6P6TR"
+            echo "bootstrap_distance_mm=50"
+            echo "bootstrap_exit_mm=60"
+            echo "real_confirm_count=2"
+            echo "built_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            arm-none-eabi-size build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.elf
+            sha256sum build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.hex
+            sha256sum build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.bin
+            sha256sum build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.elf
+          } > build-artifact/BUILD_INFO.txt
+          cat build-artifact/BUILD_INFO.txt
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: F-FLOW-ground-bootstrap-${{ github.sha }}
+          path: build-artifact/
+          if-no-files-found: error
+          retention-days: 30
