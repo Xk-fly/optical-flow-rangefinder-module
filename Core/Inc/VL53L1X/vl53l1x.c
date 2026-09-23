@@ -48,7 +48,6 @@ uint8_t vl53_Init(void)
 VL53ReadResult vl53_GetDistance(uint16_t *distance_mm)
 {
     uint8_t data_ready = 0U;
-    uint8_t range_status = 255U;
     uint16_t measurement_mm = 0U;
 
     if (distance_mm == NULL) {
@@ -60,10 +59,6 @@ VL53ReadResult vl53_GetDistance(uint16_t *distance_mm)
     if (data_ready == 0U) {
         return VL53_READ_NOT_READY;
     }
-    if (VL53L1X_GetRangeStatus(VL53_I2C_ADDRESS, &range_status) != VL53L1X_ERROR_NONE) {
-        (void)VL53L1X_ClearInterrupt(VL53_I2C_ADDRESS);
-        return VL53_READ_ERROR;
-    }
     if (VL53L1X_GetDistance(VL53_I2C_ADDRESS, &measurement_mm) != VL53L1X_ERROR_NONE) {
         (void)VL53L1X_ClearInterrupt(VL53_I2C_ADDRESS);
         return VL53_READ_ERROR;
@@ -73,23 +68,15 @@ VL53ReadResult vl53_GetDistance(uint16_t *distance_mm)
     }
 
     /*
-     * Keep the known-good production behavior for normal-range measurements:
-     * once the result is >= 50 mm, do not newly gate it on RangeStatus.
-     *
-     * The bootstrap exception is deliberately stricter.  A sub-50 mm result
-     * is classified as TOO_CLOSE only if the ULD itself reports either a
-     * valid range (0) or "valid/min-range-clipped" (3).  Signal, phase,
-     * hardware, processing and invalid-range statuses are treated as errors,
-     * so a failed/noisy sensor cannot be disguised as a synthetic 5 cm ground
-     * reading.
+     * Ground-bootstrap V2 deliberately treats every successful API distance
+     * read below 50 mm as a near-field observation.  The sensor is physically
+     * mounted about 20-30 mm above the ground, so RangeStatus is not required
+     * to be "valid" in this out-of-spec near field.  I2C/API failures remain
+     * VL53_READ_ERROR and therefore can never create a synthetic ground range.
      */
     *distance_mm = measurement_mm;
     if (measurement_mm < VL53_REAL_MIN_DISTANCE_MM) {
-        if ((range_status == VL53_RANGE_STATUS_VALID) ||
-            (range_status == VL53_RANGE_STATUS_MIN_RANGE_CLIPPED)) {
-            return VL53_READ_TOO_CLOSE;
-        }
-        return VL53_READ_ERROR;
+        return VL53_READ_TOO_CLOSE;
     }
     if (measurement_mm > VL53_REAL_MAX_DISTANCE_MM) {
         return VL53_READ_TOO_FAR;
