@@ -6,9 +6,6 @@
 #define VL53_REAL_MIN_DISTANCE_MM 50U
 #define VL53_REAL_MAX_DISTANCE_MM 3600U
 
-/* VL53L1X ULD simplified range status values. */
-#define VL53_RANGE_STATUS_VALID 0U
-#define VL53_RANGE_STATUS_MIN_RANGE_CLIPPED 3U
 
 typedef enum {
     VL53_READ_NOT_READY = 0,
