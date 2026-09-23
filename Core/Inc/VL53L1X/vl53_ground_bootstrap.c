@@ -129,6 +129,8 @@ uint8_t VL53GroundBootstrap_Update(VL53GroundBootstrap *state,
             if (recent_low_altitude_evidence(state) != 0U) {
                 state->mode = VL53_RANGE_LANDING_CONFIRM;
                 state->landing_confirm_count = 1U;
+            } else if (state->updates_since_valid > VL53_GROUND_LAST_VALID_MAX_AGE_UPDATES) {
+                state->landing_armed = 0U;
             }
             return 0U;
 
@@ -136,6 +138,9 @@ uint8_t VL53GroundBootstrap_Update(VL53GroundBootstrap *state,
         case VL53_READ_TOO_FAR:
         case VL53_READ_ERROR:
         default:
+            if (state->updates_since_valid > VL53_GROUND_LAST_VALID_MAX_AGE_UPDATES) {
+                state->landing_armed = 0U;
+            }
             return 0U;
         }
     }
