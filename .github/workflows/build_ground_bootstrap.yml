@@ -70,29 +70,34 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build-artifact
-          cp build-ci/STM32G030F6P6TR.hex build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.hex
-          cp build-ci/STM32G030F6P6TR.bin build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.bin
-          cp build-ci/STM32G030F6P6TR.elf build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.elf
-          cp build-ci/STM32G030F6P6TR.map build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.map
+          cp build-ci/STM32G030F6P6TR.hex build-artifact/F_FLOW_GROUND_BOOTSTRAP_V2_5CM.hex
+          cp build-ci/STM32G030F6P6TR.bin build-artifact/F_FLOW_GROUND_BOOTSTRAP_V2_5CM.bin
+          cp build-ci/STM32G030F6P6TR.elf build-artifact/F_FLOW_GROUND_BOOTSTRAP_V2_5CM.elf
+          cp build-ci/STM32G030F6P6TR.map build-artifact/F_FLOW_GROUND_BOOTSTRAP_V2_5CM.map
           {
             echo "branch=${GITHUB_REF_NAME}"
             echo "commit=${GITHUB_SHA}"
             echo "target=STM32G030F6P6TR"
             echo "bootstrap_distance_mm=50"
-            echo "bootstrap_exit_mm=60"
+            echo "bootstrap_exit_mm=80"
             echo "real_confirm_count=2"
+            echo "airborne_clear_mm=250"
+            echo "landing_arm_mm=200"
+            echo "landing_near_mm=80"
+            echo "landing_confirm_count=2"
+            echo "last_valid_max_age_updates=5"
             echo "built_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            arm-none-eabi-size build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.elf
-            sha256sum build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.hex
-            sha256sum build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.bin
-            sha256sum build-artifact/F_FLOW_GROUND_BOOTSTRAP_5CM.elf
+            arm-none-eabi-size build-artifact/F_FLOW_GROUND_BOOTSTRAP_V2_5CM.elf
+            sha256sum build-artifact/F_FLOW_GROUND_BOOTSTRAP_V2_5CM.hex
+            sha256sum build-artifact/F_FLOW_GROUND_BOOTSTRAP_V2_5CM.bin
+            sha256sum build-artifact/F_FLOW_GROUND_BOOTSTRAP_V2_5CM.elf
           } > build-artifact/BUILD_INFO.txt
           cat build-artifact/BUILD_INFO.txt
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: F-FLOW-ground-bootstrap-${{ github.sha }}
+          name: F-FLOW-ground-bootstrap-v2-${{ github.sha }}
           path: build-artifact/
           if-no-files-found: error
           retention-days: 30
