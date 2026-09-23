@@ -111,9 +111,9 @@ uint8_t VL53GroundBootstrap_Update(VL53GroundBootstrap *state,
             if (measured_mm >= VL53_GROUND_AIRBORNE_CLEAR_MM) {
                 state->airborne_clear_seen = 1U;
                 state->landing_armed = 0U;
-            } else if ((state->airborne_clear_seen != 0U) &&
-                       (measured_mm <= VL53_GROUND_LANDING_ARM_MM)) {
-                state->landing_armed = 1U;
+            } else if (state->airborne_clear_seen != 0U) {
+                state->landing_armed =
+                    (measured_mm <= VL53_GROUND_LANDING_ARM_MM) ? 1U : 0U;
             }
 
             if ((state->landing_armed != 0U) &&
@@ -155,9 +155,8 @@ uint8_t VL53GroundBootstrap_Update(VL53GroundBootstrap *state,
         if (measured_mm > VL53_GROUND_LANDING_NEAR_MM) {
             state->mode = VL53_RANGE_REAL_FLIGHT;
             state->landing_confirm_count = 0U;
-            if (measured_mm <= VL53_GROUND_LANDING_ARM_MM) {
-                state->landing_armed = 1U;
-            }
+            state->landing_armed =
+                (measured_mm <= VL53_GROUND_LANDING_ARM_MM) ? 1U : 0U;
             *published_mm = measured_mm;
             return 1U;
         }
