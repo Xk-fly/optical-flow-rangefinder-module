@@ -12,6 +12,9 @@ MAIN = (ROOT / "Core/Src/main.c").read_text(encoding="utf-8")
 DRIVER = (ROOT / "Core/Src/PMW3901MB/pmw_3901.c").read_text(encoding="utf-8")
 VL53 = (ROOT / "Core/Inc/VL53L1X/vl53l1x.c").read_text(encoding="utf-8")
 VL53_HEADER = (ROOT / "Core/Inc/VL53L1X/vl53l1x.h").read_text(encoding="utf-8")
+VL53_TYPES = (ROOT / "Core/Inc/VL53L1X/vl53_types.h").read_text(encoding="utf-8")
+BOOTSTRAP = (ROOT / "Core/Inc/VL53L1X/vl53_ground_bootstrap.c").read_text(encoding="utf-8")
+BOOTSTRAP_HEADER = (ROOT / "Core/Inc/VL53L1X/vl53_ground_bootstrap.h").read_text(encoding="utf-8")
 
 
 class ProductionFirmwareContractTests(unittest.TestCase):
@@ -30,17 +33,20 @@ class ProductionFirmwareContractTests(unittest.TestCase):
         self.assertIn("pmw_discard_next_burst = 0U;", DRIVER)
         self.assertIn("PMW3901_STATUS_DISCARDED", DRIVER)
 
-    def test_range_read_is_nonblocking_and_clears_the_sensor_interrupt(self):
-        self.assertIn("uint8_t vl53_GetDistance(uint16_t *distance_mm)", VL53)
+    def test_range_read_is_nonblocking_and_classifies_failures(self):
+        self.assertIn("VL53ReadResult vl53_GetDistance(uint16_t *distance_mm)", VL53)
         self.assertNotIn("while (dataReady == 0)", VL53)
         self.assertIn("VL53L1X_ClearInterrupt", VL53)
-        self.assertIn("vl53_GetDistance(&new_distance)", MAIN)
-        self.assertIn("if (vl53_ok &&", MAIN)
+        self.assertIn("VL53_READ_NOT_READY", VL53)
+        self.assertIn("VL53_READ_TOO_CLOSE", VL53)
+        self.assertIn("VL53_READ_TOO_FAR", VL53)
+        self.assertIn("VL53_READ_ERROR", VL53)
+        self.assertIn("VL53ReadResult read_result = vl53_GetDistance(&new_distance);", MAIN)
 
     def test_range_filter_and_optical_flow_share_one_freshness_timeout(self):
         self.assertIn("#define VL53_DISTANCE_FRESH_TIMEOUT_MS 300U", VL53_HEADER)
-        self.assertIn("#define VL53_MIN_DISTANCE_MM  50U", VL53)
-        self.assertIn("#define VL53_MAX_DISTANCE_MM  3600U", VL53)
+        self.assertIn("#define VL53_REAL_MIN_DISTANCE_MM 50U", VL53_TYPES)
+        self.assertIn("#define VL53_REAL_MAX_DISTANCE_MM 3600U", VL53_TYPES)
         self.assertIn("VL53Median3Filter_Update", VL53)
         self.assertIn("VL53_DISTANCE_FRESH_TIMEOUT_MS", VL53)
         self.assertIn("VL53_DISTANCE_FRESH_TIMEOUT_MS", MAIN)
@@ -50,10 +56,26 @@ class ProductionFirmwareContractTests(unittest.TestCase):
         self.assertIn("last_distance_update_ms = HAL_GetTick();", MAIN)
         self.assertNotIn("last_distance_update_ms = now;", MAIN)
 
+    def test_ground_bootstrap_is_near_field_only_and_one_way(self):
+        self.assertIn("#define VL53_GROUND_BOOTSTRAP_DISTANCE_MM 50U", BOOTSTRAP_HEADER)
+        self.assertIn("#define VL53_GROUND_BOOTSTRAP_EXIT_MM 60U", BOOTSTRAP_HEADER)
+        self.assertIn("#define VL53_GROUND_BOOTSTRAP_CONFIRM_COUNT 2U", BOOTSTRAP_HEADER)
+        self.assertIn("case VL53_READ_TOO_CLOSE:", BOOTSTRAP)
+        self.assertIn("case VL53_READ_ERROR:", BOOTSTRAP)
+        self.assertIn("VL53_RANGE_REAL_LOCKED", BOOTSTRAP)
+        self.assertIn("VL53GroundBootstrap_Update(&range_bootstrap", MAIN)
+        self.assertIn('"VL53 ground bootstrap 5cm"', MAIN)
+        self.assertIn('"VL53 real range locked"', MAIN)
+        real_mode = BOOTSTRAP.split("if (state->mode == VL53_RANGE_REAL_LOCKED)", 1)[1]
+        self.assertIn("if (result != VL53_READ_VALID)", real_mode)
+        self.assertIn("return 0U;", real_mode)
+
     def test_real_range_is_encoded_in_both_mavlink_messages(self):
         self.assertIn("uint8_t distance_valid", ADAPTER)
         self.assertIn("distance_valid ? ((float)distance_mm / 1000.0f) : -1.0f", ADAPTER)
         self.assertIn("mavlink_distance_sensor_t mdst = {0};", ADAPTER)
+        self.assertIn("mdst.min_distance = 5;", ADAPTER)
+        self.assertIn("mdst.max_distance = 360;", ADAPTER)
 
     def test_production_scheduler_prioritizes_flow_and_disables_periodic_diagnostics(self):
         self.assertIn("#define PMW3901_ENABLE_PERIODIC_DIAGNOSTICS 0U", MAIN)
