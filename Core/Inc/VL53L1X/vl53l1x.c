@@ -3,8 +3,6 @@
 
 #define VL53_I2C_ADDRESS      0x52U
 #define VL53_BOOT_TIMEOUT_MS  1000U
-#define VL53_MIN_DISTANCE_MM  50U
-#define VL53_MAX_DISTANCE_MM  3600U
 
 static VL53Median3Filter vl53_distance_filter;
 
@@ -47,39 +45,45 @@ uint8_t vl53_Init(void)
     return 1U;
 }
 
-uint8_t vl53_GetDistance(uint16_t *distance_mm)
+VL53ReadResult vl53_GetDistance(uint16_t *distance_mm)
 {
     uint8_t data_ready = 0U;
     uint16_t measurement_mm = 0U;
 
     if (distance_mm == NULL) {
-        return 0U;
+        return VL53_READ_ERROR;
     }
     if (VL53L1X_CheckForDataReady(VL53_I2C_ADDRESS, &data_ready) != VL53L1X_ERROR_NONE) {
-        return 0U;
+        return VL53_READ_ERROR;
     }
     if (data_ready == 0U) {
-        return 0U;
+        return VL53_READ_NOT_READY;
     }
     if (VL53L1X_GetDistance(VL53_I2C_ADDRESS, &measurement_mm) != VL53L1X_ERROR_NONE) {
         (void)VL53L1X_ClearInterrupt(VL53_I2C_ADDRESS);
-        return 0U;
+        return VL53_READ_ERROR;
     }
     if (VL53L1X_ClearInterrupt(VL53_I2C_ADDRESS) != VL53L1X_ERROR_NONE) {
-        return 0U;
+        return VL53_READ_ERROR;
     }
 
-    /* Keep the Known-Good behavior: do not gate on RangeStatus.
-       Only reject values outside the physical range advertised to ArduPilot. */
-    if ((measurement_mm < VL53_MIN_DISTANCE_MM) ||
-        (measurement_mm > VL53_MAX_DISTANCE_MM)) {
-        return 0U;
+    /*
+     * Preserve the known-good policy of not gating on RangeStatus, but keep
+     * "too close", "too far" and transport/API errors distinct.  This lets
+     * the ground-bootstrap layer substitute a value only for the physically
+     * expected near-field case and never hide a sensor/communication fault.
+     */
+    *distance_mm = measurement_mm;
+    if (measurement_mm < VL53_REAL_MIN_DISTANCE_MM) {
+        return VL53_READ_TOO_CLOSE;
+    }
+    if (measurement_mm > VL53_REAL_MAX_DISTANCE_MM) {
+        return VL53_READ_TOO_FAR;
     }
 
     *distance_mm = VL53Median3Filter_Update(&vl53_distance_filter,
                                             measurement_mm,
                                             HAL_GetTick(),
                                             VL53_DISTANCE_FRESH_TIMEOUT_MS);
-
-    return 1U;
+    return VL53_READ_VALID;
 }
