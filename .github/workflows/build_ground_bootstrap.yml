@@ -48,12 +48,22 @@ jobs:
           bash tools/test-vl53-median-filter.sh
           bash tools/test-vl53-ground-bootstrap.sh
 
+      - name: Prepare GCC10-compatible linker script
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp STM32G030F6PX_FLASH.ld /tmp/STM32G030F6PX_CI.ld
+          # The CubeMX linker script itself documents that READONLY section
+          # attributes require GCC11+.  The proven ArduPilot ChibiOS image
+          # carries GCC10, so remove only that optional keyword for CI.
+          sed -i 's/ (READONLY)//g' /tmp/STM32G030F6PX_CI.ld
+
       - name: Clean build STM32G030 firmware
         shell: bash
         run: |
           set -euo pipefail
-          make BUILD_DIR=build-ci clean
-          make BUILD_DIR=build-ci -j2 all
+          make BUILD_DIR=build-ci LDSCRIPT=/tmp/STM32G030F6PX_CI.ld clean
+          make BUILD_DIR=build-ci LDSCRIPT=/tmp/STM32G030F6PX_CI.ld -j2 all
 
       - name: Record build metadata
         shell: bash
