@@ -366,8 +366,8 @@ int main(void)
 	  uint8_t vl53_ok = vl53_Init();
 	  VL53GroundBootstrap range_bootstrap;
 	  VL53GroundBootstrap_Reset(&range_bootstrap);
-	  uint8_t bootstrap_announced = 0U;
-	  uint8_t real_range_announced = 0U;
+	  VL53RangeMode announced_range_mode = VL53_RANGE_BOOTSTRAP;
+	  uint8_t announced_range_mode_valid = 0U;
 	  send_status_text(&huart2, vl53_ok ? MAV_SEVERITY_INFO : MAV_SEVERITY_WARNING,
 	                   vl53_ok ? "VL53 init ok" : "VL53 init failed");
 	  send_heart_beat(&huart2);
@@ -430,27 +430,29 @@ int main(void)
 
 		  if (vl53_ok) {
 			  VL53ReadResult read_result = vl53_GetDistance(&new_distance);
-			  VL53RangeMode mode_before = range_bootstrap.mode;
 
 			  if (VL53GroundBootstrap_Update(&range_bootstrap,
 			                                 read_result,
 			                                 new_distance,
 			                                 &published_distance,
 			                                 &using_bootstrap) != 0U) {
+				  VL53RangeMode published_mode =
+				      (using_bootstrap != 0U) ? VL53_RANGE_BOOTSTRAP : VL53_RANGE_REAL_FLIGHT;
+
 				  distance = published_distance;
 				  has_distance = 1U;
 				  last_distance_update_ms = HAL_GetTick();
 				  send_distance_sensor(&huart2, distance);
 
-				  if ((using_bootstrap != 0U) && (bootstrap_announced == 0U)) {
-					  bootstrap_announced = 1U;
-					  send_status_text(&huart2, MAV_SEVERITY_INFO, "VL53 ground bootstrap 5cm");
-				  }
-				  if ((mode_before != range_bootstrap.mode) &&
-				      (range_bootstrap.mode == VL53_RANGE_REAL_LOCKED) &&
-				      (real_range_announced == 0U)) {
-					  real_range_announced = 1U;
-					  send_status_text(&huart2, MAV_SEVERITY_INFO, "VL53 real range locked");
+				  if ((announced_range_mode_valid == 0U) ||
+				      (published_mode != announced_range_mode)) {
+					  announced_range_mode = published_mode;
+					  announced_range_mode_valid = 1U;
+					  send_status_text(&huart2,
+					                   MAV_SEVERITY_INFO,
+					                   (published_mode == VL53_RANGE_BOOTSTRAP) ?
+					                       "VL53 ground bootstrap V2 5cm" :
+					                       "VL53 real range active");
 				  }
 			  }
 		  }
