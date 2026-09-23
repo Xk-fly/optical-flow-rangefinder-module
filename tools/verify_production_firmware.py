@@ -37,9 +37,6 @@ class ProductionFirmwareContractTests(unittest.TestCase):
         self.assertIn("VL53ReadResult vl53_GetDistance(uint16_t *distance_mm)", VL53)
         self.assertNotIn("while (dataReady == 0)", VL53)
         self.assertIn("VL53L1X_ClearInterrupt", VL53)
-        self.assertIn("VL53L1X_GetRangeStatus", VL53)
-        self.assertIn("VL53_RANGE_STATUS_VALID", VL53)
-        self.assertIn("VL53_RANGE_STATUS_MIN_RANGE_CLIPPED", VL53)
         self.assertIn("VL53_READ_NOT_READY", VL53)
         self.assertIn("VL53_READ_TOO_CLOSE", VL53)
         self.assertIn("VL53_READ_TOO_FAR", VL53)
@@ -50,8 +47,6 @@ class ProductionFirmwareContractTests(unittest.TestCase):
         self.assertIn("#define VL53_DISTANCE_FRESH_TIMEOUT_MS 300U", VL53_HEADER)
         self.assertIn("#define VL53_REAL_MIN_DISTANCE_MM 50U", VL53_TYPES)
         self.assertIn("#define VL53_REAL_MAX_DISTANCE_MM 3600U", VL53_TYPES)
-        self.assertIn("#define VL53_RANGE_STATUS_VALID 0U", VL53_TYPES)
-        self.assertIn("#define VL53_RANGE_STATUS_MIN_RANGE_CLIPPED 3U", VL53_TYPES)
         self.assertIn("VL53Median3Filter_Update", VL53)
         self.assertIn("VL53_DISTANCE_FRESH_TIMEOUT_MS", VL53)
         self.assertIn("VL53_DISTANCE_FRESH_TIMEOUT_MS", MAIN)
@@ -61,19 +56,29 @@ class ProductionFirmwareContractTests(unittest.TestCase):
         self.assertIn("last_distance_update_ms = HAL_GetTick();", MAIN)
         self.assertNotIn("last_distance_update_ms = now;", MAIN)
 
-    def test_ground_bootstrap_is_near_field_only_and_one_way(self):
-        self.assertIn("#define VL53_GROUND_BOOTSTRAP_DISTANCE_MM 50U", BOOTSTRAP_HEADER)
-        self.assertIn("#define VL53_GROUND_BOOTSTRAP_EXIT_MM 60U", BOOTSTRAP_HEADER)
-        self.assertIn("#define VL53_GROUND_BOOTSTRAP_CONFIRM_COUNT 2U", BOOTSTRAP_HEADER)
-        self.assertIn("case VL53_READ_TOO_CLOSE:", BOOTSTRAP)
-        self.assertIn("case VL53_READ_ERROR:", BOOTSTRAP)
-        self.assertIn("VL53_RANGE_REAL_LOCKED", BOOTSTRAP)
+    def test_ground_bootstrap_v2_is_repeatable_and_guarded(self):
+        self.assertIn("#define VL53_GROUND_BOOTSTRAP_DISTANCE_MM       50U", BOOTSTRAP_HEADER)
+        self.assertIn("#define VL53_GROUND_BOOTSTRAP_EXIT_MM           80U", BOOTSTRAP_HEADER)
+        self.assertIn("#define VL53_GROUND_REAL_CONFIRM_COUNT           2U", BOOTSTRAP_HEADER)
+        self.assertIn("#define VL53_GROUND_AIRBORNE_CLEAR_MM          250U", BOOTSTRAP_HEADER)
+        self.assertIn("#define VL53_GROUND_LANDING_ARM_MM             200U", BOOTSTRAP_HEADER)
+        self.assertIn("#define VL53_GROUND_LANDING_NEAR_MM             80U", BOOTSTRAP_HEADER)
+        self.assertIn("#define VL53_GROUND_LANDING_CONFIRM_COUNT        2U", BOOTSTRAP_HEADER)
+        self.assertIn("#define VL53_GROUND_LAST_VALID_MAX_AGE_UPDATES   5U", BOOTSTRAP_HEADER)
+        self.assertIn("VL53_RANGE_BOOTSTRAP", BOOTSTRAP_HEADER)
+        self.assertIn("VL53_RANGE_REAL_FLIGHT", BOOTSTRAP_HEADER)
+        self.assertIn("VL53_RANGE_LANDING_CONFIRM", BOOTSTRAP_HEADER)
+        self.assertIn("enter_bootstrap(state);", BOOTSTRAP)
+        self.assertIn("recent_low_altitude_evidence", BOOTSTRAP)
         self.assertIn("VL53GroundBootstrap_Update(&range_bootstrap", MAIN)
-        self.assertIn('"VL53 ground bootstrap 5cm"', MAIN)
-        self.assertIn('"VL53 real range locked"', MAIN)
-        real_mode = BOOTSTRAP.split("if (state->mode == VL53_RANGE_REAL_LOCKED)", 1)[1]
-        self.assertIn("if (result != VL53_READ_VALID)", real_mode)
-        self.assertIn("return 0U;", real_mode)
+        self.assertIn('"VL53 ground bootstrap V2 5cm"', MAIN)
+        self.assertIn('"VL53 real range active"', MAIN)
+
+        # Successful sub-50mm reads are deliberately treated as near-field,
+        # but transport/API failures still remain VL53_READ_ERROR.
+        self.assertIn("if (measurement_mm < VL53_REAL_MIN_DISTANCE_MM)", VL53)
+        self.assertIn("return VL53_READ_TOO_CLOSE;", VL53)
+        self.assertIn("return VL53_READ_ERROR;", VL53)
 
     def test_real_range_is_encoded_in_both_mavlink_messages(self):
         self.assertIn("uint8_t distance_valid", ADAPTER)
