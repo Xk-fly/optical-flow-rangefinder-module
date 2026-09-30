@@ -68,7 +68,7 @@ VL53ReadResult vl53_GetDistance(uint16_t *distance_mm)
     }
 
     /*
-     * Ground-bootstrap V2 deliberately treats every successful API distance
+     * Ground-bootstrap V3 deliberately treats every successful API distance
      * read below 50 mm as a near-field observation.  The sensor is physically
      * mounted about 20-30 mm above the ground, so RangeStatus is not required
      * to be "valid" in this out-of-spec near field.  I2C/API failures remain
