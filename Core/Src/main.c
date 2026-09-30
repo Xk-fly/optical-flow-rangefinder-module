@@ -451,7 +451,7 @@ int main(void)
 					  send_status_text(&huart2,
 					                   MAV_SEVERITY_INFO,
 					                   (published_mode == VL53_RANGE_BOOTSTRAP) ?
-					                       "VL53 ground bootstrap V2 5cm" :
+					                       "VL53 ground bootstrap V3 5cm" :
 					                       "VL53 real range active");
 				  }
 			  }
