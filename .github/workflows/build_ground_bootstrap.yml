@@ -81,11 +81,10 @@ jobs:
             echo "bootstrap_distance_mm=50"
             echo "bootstrap_exit_mm=150"
             echo "real_confirm_count=2"
-            echo "airborne_clear_mm=250"
-            echo "landing_arm_mm=200"
-            echo "landing_near_mm=80"
+            echo "landing_near_mm=100"
             echo "landing_confirm_count=2"
-            echo "last_valid_max_age_updates=5"
+            echo "nodata_last_valid_max_mm=300"
+            echo "nodata_confirm_count=3"
             echo "built_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             arm-none-eabi-size build-artifact/F_FLOW_GROUND_BOOTSTRAP_V3_5CM.elf
             sha256sum build-artifact/F_FLOW_GROUND_BOOTSTRAP_V3_5CM.hex
