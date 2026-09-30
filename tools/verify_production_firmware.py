@@ -56,23 +56,30 @@ class ProductionFirmwareContractTests(unittest.TestCase):
         self.assertIn("last_distance_update_ms = HAL_GetTick();", MAIN)
         self.assertNotIn("last_distance_update_ms = now;", MAIN)
 
-    def test_ground_bootstrap_v2_is_repeatable_and_guarded(self):
+    def test_ground_bootstrap_v3_is_simple_repeatable_and_guarded(self):
         self.assertIn("#define VL53_GROUND_BOOTSTRAP_DISTANCE_MM       50U", BOOTSTRAP_HEADER)
-        self.assertIn("#define VL53_GROUND_BOOTSTRAP_EXIT_MM           80U", BOOTSTRAP_HEADER)
+        self.assertIn("#define VL53_GROUND_BOOTSTRAP_EXIT_MM          150U", BOOTSTRAP_HEADER)
         self.assertIn("#define VL53_GROUND_REAL_CONFIRM_COUNT           2U", BOOTSTRAP_HEADER)
-        self.assertIn("#define VL53_GROUND_AIRBORNE_CLEAR_MM          250U", BOOTSTRAP_HEADER)
-        self.assertIn("#define VL53_GROUND_LANDING_ARM_MM             200U", BOOTSTRAP_HEADER)
-        self.assertIn("#define VL53_GROUND_LANDING_NEAR_MM             80U", BOOTSTRAP_HEADER)
+        self.assertIn("#define VL53_GROUND_LANDING_NEAR_MM            100U", BOOTSTRAP_HEADER)
         self.assertIn("#define VL53_GROUND_LANDING_CONFIRM_COUNT        2U", BOOTSTRAP_HEADER)
-        self.assertIn("#define VL53_GROUND_LAST_VALID_MAX_AGE_UPDATES   5U", BOOTSTRAP_HEADER)
+        self.assertIn("#define VL53_GROUND_NODATA_LAST_VALID_MAX_MM    300U", BOOTSTRAP_HEADER)
+        self.assertIn("#define VL53_GROUND_NODATA_CONFIRM_COUNT          3U", BOOTSTRAP_HEADER)
         self.assertIn("VL53_RANGE_BOOTSTRAP", BOOTSTRAP_HEADER)
         self.assertIn("VL53_RANGE_REAL_FLIGHT", BOOTSTRAP_HEADER)
-        self.assertIn("VL53_RANGE_LANDING_CONFIRM", BOOTSTRAP_HEADER)
-        self.assertIn("enter_bootstrap(state);", BOOTSTRAP)
-        self.assertIn("recent_low_altitude_evidence", BOOTSTRAP)
+        self.assertNotIn("VL53_RANGE_LANDING_CONFIRM", BOOTSTRAP_HEADER)
+        self.assertIn("enter_bootstrap(state, 1U);", BOOTSTRAP)
+        self.assertIn("near_ground_nodata_allowed", BOOTSTRAP)
+        self.assertIn("state->bootstrap_evidence_seen != 0U", BOOTSTRAP)
+        self.assertIn("VL53_READ_NOT_READY", BOOTSTRAP)
         self.assertIn("VL53GroundBootstrap_Update(&range_bootstrap", MAIN)
-        self.assertIn('"VL53 ground bootstrap V2 5cm"', MAIN)
+        self.assertIn('"VL53 ground bootstrap V3 5cm"', MAIN)
         self.assertIn('"VL53 real range active"', MAIN)
+
+        # Mid-air NoData must never fabricate a 5 cm range unless a recent
+        # real range was already within the <=30 cm near-ground window.
+        self.assertIn("state->last_valid_real_mm <= VL53_GROUND_NODATA_LAST_VALID_MAX_MM", BOOTSTRAP)
+        self.assertIn("case VL53_READ_TOO_FAR:", BOOTSTRAP)
+        self.assertIn("case VL53_READ_ERROR:", BOOTSTRAP)
 
         # Successful sub-50mm reads are deliberately treated as near-field,
         # but transport/API failures still remain VL53_READ_ERROR.
