@@ -5,49 +5,51 @@
 #include "vl53_types.h"
 
 /*
- * Ground Bootstrap V2
+ * Ground Bootstrap V3
  *
- * The physical VL53 lens is only about 20-30 mm above the landing surface,
- * below the 50 mm trusted measurement minimum.  Publish 50 mm while on the
- * ground so ArduPilot can establish optical-flow relative aiding, then move
- * to real range after takeoff.  Unlike V1, V2 deliberately supports repeated
- * takeoff -> flight -> landing -> bootstrap cycles without rebooting.
+ * The VL53 lens is only about 20-30 mm above the landing surface, below the
+ * trusted 50 mm real-range minimum.  On the ground, publish a synthetic 50 mm
+ * range so ArduPilot can establish optical-flow relative aiding.
+ *
+ * V3 deliberately uses only two states:
+ *   BOOTSTRAP -> REAL_FLIGHT
+ *
+ * The transition out of BOOTSTRAP is conservative (>=15 cm for two samples),
+ * while returning to BOOTSTRAP is permissive only when there is recent
+ * near-ground evidence.  This prevents the observed failure where the module
+ * entered real mode while still on the ground and then remained NoData until
+ * it was physically moved, without allowing a mid-air range dropout to fake a
+ * 5 cm ground range.
  */
 #define VL53_GROUND_BOOTSTRAP_DISTANCE_MM       50U
-#define VL53_GROUND_BOOTSTRAP_EXIT_MM           80U
+#define VL53_GROUND_BOOTSTRAP_EXIT_MM          150U
 #define VL53_GROUND_REAL_CONFIRM_COUNT           2U
 
-/* A real flight must first clear 25 cm before a later landing can re-arm. */
-#define VL53_GROUND_AIRBORNE_CLEAR_MM          250U
-
-/*
- * On descent, a trusted real sample <=20 cm arms landing detection.
- * Two near-ground observations at <=8 cm (or TOO_CLOSE) then return to the
- * 5 cm bootstrap state.  At the 10 Hz range loop this is about 0.2 s.
- */
-#define VL53_GROUND_LANDING_ARM_MM             200U
-#define VL53_GROUND_LANDING_NEAR_MM             80U
+/* Two trusted real samples <=10 cm are enough to declare ground contact. */
+#define VL53_GROUND_LANDING_NEAR_MM            100U
 #define VL53_GROUND_LANDING_CONFIRM_COUNT        2U
 
 /*
- * TOO_CLOSE is allowed to confirm landing only while a recent real low-altitude
- * sample exists.  Five 10 Hz updates correspond to about 0.5 s.
+ * If REAL_FLIGHT loses usable samples after the last trusted real distance was
+ * <=30 cm, three consecutive TOO_CLOSE / NOT_READY updates (~0.3 s at 10 Hz)
+ * return to BOOTSTRAP.  Hard transport/API errors and TOO_FAR never fabricate
+ * a ground range.
  */
-#define VL53_GROUND_LAST_VALID_MAX_AGE_UPDATES   5U
+#define VL53_GROUND_NODATA_LAST_VALID_MAX_MM    300U
+#define VL53_GROUND_NODATA_CONFIRM_COUNT          3U
 
 typedef enum {
     VL53_RANGE_BOOTSTRAP = 0,
-    VL53_RANGE_REAL_FLIGHT = 1,
-    VL53_RANGE_LANDING_CONFIRM = 2
+    VL53_RANGE_REAL_FLIGHT = 1
 } VL53RangeMode;
 
 typedef struct {
     VL53RangeMode mode;
     uint8_t real_confirm_count;
     uint8_t landing_confirm_count;
-    uint8_t airborne_clear_seen;
-    uint8_t landing_armed;
-    uint8_t updates_since_valid;
+    uint8_t nodata_confirm_count;
+    uint8_t last_valid_real_present;
+    uint8_t bootstrap_evidence_seen;
     uint16_t last_valid_real_mm;
 } VL53GroundBootstrap;
 
@@ -57,22 +59,21 @@ void VL53GroundBootstrap_Reset(VL53GroundBootstrap *state);
  * Returns 1 when a range should be published to MAVLink.
  *
  * BOOTSTRAP:
- *   - TOO_CLOSE and VALID readings below 80 mm publish synthetic 50 mm.
- *   - two VALID readings >=80 mm switch to REAL_FLIGHT and publish real range.
+ *   - TOO_CLOSE and VALID readings below 15 cm publish synthetic 5 cm.
+ *   - once ground evidence has been seen, transient NOT_READY also keeps the
+ *     synthetic 5 cm alive instead of dropping to NoData.
+ *   - two VALID readings >=15 cm switch to REAL_FLIGHT and publish real range.
  *   - hard ERROR / TOO_FAR never create synthetic data.
  *
  * REAL_FLIGHT:
- *   - real ranges publish normally.
- *   - once >=250 mm has been seen, a later valid range <=200 mm arms landing.
- *   - near-ground readings then enter LANDING_CONFIRM.
- *   - mid-air TOO_CLOSE without recent low-altitude evidence cannot bootstrap.
+ *   - valid ranges publish normally.
+ *   - two valid ranges <=10 cm return directly to BOOTSTRAP.
+ *   - if the last valid real range was <=30 cm, three consecutive TOO_CLOSE or
+ *     NOT_READY updates return to BOOTSTRAP and immediately publish 5 cm.
+ *   - if the last valid range was >30 cm, NoData remains NoData; this protects
+ *     against sunlight, edges, vegetation and other mid-air dropouts.
  *
- * LANDING_CONFIRM:
- *   - two near-ground observations (<=80 mm or TOO_CLOSE) within recent-valid
- *     evidence switch back to BOOTSTRAP and immediately publish 50 mm.
- *   - climbing back above the near-ground window cancels confirmation.
- *
- * This cycle can repeat indefinitely during one power-on session.
+ * The cycle can repeat indefinitely without rebooting.
  */
 uint8_t VL53GroundBootstrap_Update(VL53GroundBootstrap *state,
                                    VL53ReadResult result,
