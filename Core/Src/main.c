@@ -24,6 +24,7 @@
 #include "PMW3901MB/pmw_3901.h"
 #include "HL5300/hl5300.h"
 #include "Adapter/massage_adapter.h"
+#include <stdio.h>
 
 /* USER CODE END Includes */
 
@@ -38,7 +39,7 @@
 #define PMW_INIT_RETRY_INTERVAL_MS      1000U
 #define PMW_SCALE_PER_MILLE             3000U
 #define FLOW_PERIOD_MS                  20U
-#define DISTANCE_PERIOD_MS              100U
+#define DISTANCE_PERIOD_MS              50U
 #define HEARTBEAT_PERIOD_MS             1000U
 #define PMW3901_ENABLE_PERIODIC_DIAGNOSTICS 0U
 #if PMW3901_ENABLE_PERIODIC_DIAGNOSTICS
@@ -364,7 +365,7 @@ int main(void)
 	  }
 	  const char *range_init_error = hl5300_init(&hi2c2);
 	  send_status_text(&huart2, range_init_error == NULL ? MAV_SEVERITY_INFO : MAV_SEVERITY_WARNING,
-	                   range_init_error == NULL ? "HL5300 init ok" : range_init_error);
+	                   range_init_error == NULL ? "HL5300 init ok (25mm 20Hz)" : range_init_error);
 	  send_heart_beat(&huart2);
   /* USER CODE END 2 */
   /* Infinite loop */
@@ -379,6 +380,11 @@ int main(void)
   uint16_t distance = 0U;
   uint8_t has_distance = 0U;
   uint32_t last_distance_update_ms = 0U;
+  int16_t last_raw_mm = -1;
+  uint8_t range_polls = 0U;
+  uint8_t range_ready = 0U;
+  uint8_t range_valid = 0U;
+  uint8_t range_io_errors = 0U;
 
   while (1) {
 	  uint32_t now = HAL_GetTick();
@@ -417,11 +423,23 @@ int main(void)
 		  send_optical_flow(&huart2, x, y, quality, distance, distance_fresh);
 	  }
 
-	  if (now - last_distance_ms >= DISTANCE_PERIOD_MS) {
+	  if (range_init_error == NULL && now - last_distance_ms >= DISTANCE_PERIOD_MS) {
 		  last_distance_ms = now;
-		  if (range_init_error == NULL && hl5300_read_distance(&hi2c2, &distance)) {
+		  int16_t raw_mm = 0;
+		  const HL5300ReadResult result = hl5300_read_distance(&hi2c2, &raw_mm);
+		  range_polls++;
+		  if (result == HL5300_IO_ERROR) {
+			  range_io_errors++;
+		  }
+		  if (result == HL5300_VALID || result == HL5300_OUT_OF_RANGE) {
+			  last_raw_mm = raw_mm;
+			  range_ready++;
+		  }
+		  if (result == HL5300_VALID) {
 			  const uint8_t first_range = (has_distance == 0U);
+			  distance = (uint16_t)raw_mm;
 			  has_distance = 1U;
+			  range_valid++;
 			  last_distance_update_ms = HAL_GetTick();
 			  send_distance_sensor(&huart2, distance);
 			  if (first_range != 0U) {
@@ -433,6 +451,20 @@ int main(void)
 	  if (now - last_heartbeat_ms >= HEARTBEAT_PERIOD_MS) {
 		  last_heartbeat_ms = now;
 		  send_heart_beat(&huart2);
+
+		  // Near-ground diagnostics at 1 Hz, or when the sensor produced no valid readings.
+		  if (range_polls != 0U && (last_raw_mm <= 80 || range_valid == 0U)) {
+			  char report[50];
+			  snprintf(report, sizeof(report), "HL5300 mm=%d ready=%u/%u ok=%u err=%u",
+			           (int)last_raw_mm, (unsigned)range_ready, (unsigned)range_polls,
+			           (unsigned)range_valid, (unsigned)range_io_errors);
+			  send_status_text(&huart2, MAV_SEVERITY_INFO, report);
+		  }
+		  last_raw_mm = -1;
+		  range_polls = 0U;
+		  range_ready = 0U;
+		  range_valid = 0U;
+		  range_io_errors = 0U;
 	  }
 
     /* USER CODE END WHILE */

@@ -1,11 +1,11 @@
 #include "HL5300/hl5300.h"
 
+#include <stdbool.h>
+
 #define HL5300_ADDRESS (0x6CU << 1)
 #define HL5300_IO_TIMEOUT_MS 6U
 #define HL5300_FIRMWARE_SIZE 7679U
 #define HL5300_PAGE_SIZE 32U
-#define HL5300_MIN_DISTANCE_MM 50U
-#define HL5300_MAX_DISTANCE_MM 3600U
 
 #define ARRAY_COUNT(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -218,23 +218,26 @@ const char *hl5300_init(I2C_HandleTypeDef *bus)
     return NULL;
 }
 
-bool hl5300_read_distance(I2C_HandleTypeDef *bus, uint16_t *distance_mm)
+HL5300ReadResult hl5300_read_distance(I2C_HandleTypeDef *bus, int16_t *raw_mm)
 {
     uint8_t status;
+    if (!read_registers(bus, REG_INTERRUPT_STATUS, &status, 1U)) {
+        return HL5300_IO_ERROR;
+    }
+    if ((status & INTERRUPT_DATA_READY) == 0U) {
+        return HL5300_NO_DATA;
+    }
+
     uint8_t sample[32];
-    if (!read_registers(bus, REG_INTERRUPT_STATUS, &status, 1U) ||
-        (status & INTERRUPT_DATA_READY) == 0U ||
-        !read_registers(bus, REG_SCRATCH, sample, sizeof(sample))) {
-        return false;
+    if (!read_registers(bus, REG_SCRATCH, sample, sizeof(sample))) {
+        return HL5300_IO_ERROR;
     }
 
-    /* The vendor's Get_Measure1_Data reads signed raw ToF in mm from bytes 12 and 13.
-       Negative values also fail the upper bound when decoded as unsigned. */
-    const uint16_t raw_mm = (uint16_t)sample[12] | ((uint16_t)sample[13] << 8U);
-    if (raw_mm < HL5300_MIN_DISTANCE_MM || raw_mm > HL5300_MAX_DISTANCE_MM) {
-        return false;
+    /* Vendor Get_Measure1_Data: bytes 12 and 13 contain signed raw ToF in mm. */
+    const uint16_t encoded = (uint16_t)sample[12] | ((uint16_t)sample[13] << 8U);
+    *raw_mm = (int16_t)encoded;
+    if (*raw_mm < HL5300_MIN_DISTANCE_MM || *raw_mm > HL5300_MAX_DISTANCE_MM) {
+        return HL5300_OUT_OF_RANGE;
     }
-
-    *distance_mm = raw_mm;
-    return true;
+    return HL5300_VALID;
 }

@@ -74,8 +74,8 @@ require(
     "50 Hz optical-flow scheduler is missing",
 )
 require(
-    "#define DISTANCE_PERIOD_MS" in MAIN and "100U" in MAIN,
-    "10 Hz distance scheduler is missing",
+    re.search(r"^#define\s+DISTANCE_PERIOD_MS\s+50U\s*$", MAIN, re.M) is not None,
+    "20 Hz distance scheduler is missing",
 )
 require(
     "#define HEARTBEAT_PERIOD_MS" in MAIN and "1000U" in MAIN,

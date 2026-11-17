@@ -1,5 +1,6 @@
 
 #include "massage_adapter.h"
+#include "HL5300/hl5300.h"
 uint8_t SYSTEM_ID = 1 ;
 uint8_t COMPONENT_ID = MAV_COMP_ID_PERIPHERAL;
 
@@ -57,9 +58,9 @@ void send_distance_sensor(UART_HandleTypeDef *huart,uint16_t distance){
 	mdst.time_boot_ms = HAL_GetTick();
 	mdst.id = 1;
 	//	cm
-	mdst.min_distance = 5;
+	mdst.min_distance = HL5300_MIN_DISTANCE_MM / 10U;
 	//	cm
-	mdst.max_distance = 360;
+	mdst.max_distance = HL5300_MAX_DISTANCE_MM / 10U;
 
 	mdst.current_distance = distance / 10;
 	//	MAV_DISTANCE_SENSOR_LASER
