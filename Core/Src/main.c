@@ -22,8 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "PMW3901MB/pmw_3901.h"
-#include "VL53L1X/vl53l1x.h"
-#include "VL53L1X/vl53_ground_bootstrap.h"
+#include "HL5300/hl5300.h"
 #include "Adapter/massage_adapter.h"
 
 /* USER CODE END Includes */
@@ -363,13 +362,9 @@ int main(void)
 	  } else {
 		  PMW_SendInitFailed(pmw_err);
 	  }
-	  uint8_t vl53_ok = vl53_Init();
-	  VL53GroundBootstrap range_bootstrap;
-	  VL53GroundBootstrap_Reset(&range_bootstrap);
-	  VL53RangeMode announced_range_mode = VL53_RANGE_BOOTSTRAP;
-	  uint8_t announced_range_mode_valid = 0U;
-	  send_status_text(&huart2, vl53_ok ? MAV_SEVERITY_INFO : MAV_SEVERITY_WARNING,
-	                   vl53_ok ? "VL53 init ok" : "VL53 init failed");
+	  const char *range_init_error = hl5300_init(&hi2c2);
+	  send_status_text(&huart2, range_init_error == NULL ? MAV_SEVERITY_INFO : MAV_SEVERITY_WARNING,
+	                   range_init_error == NULL ? "HL5300 init ok" : range_init_error);
 	  send_heart_beat(&huart2);
   /* USER CODE END 2 */
   /* Infinite loop */
@@ -418,42 +413,19 @@ int main(void)
 			  pollingMotion(&x, &y, &quality, PMW_SCALE_PER_MILLE);
 		  }
 		  uint8_t distance_fresh = (has_distance != 0U) &&
-		                           ((now - last_distance_update_ms) <= VL53_DISTANCE_FRESH_TIMEOUT_MS);
+		                           ((now - last_distance_update_ms) <= HL5300_DISTANCE_FRESH_TIMEOUT_MS);
 		  send_optical_flow(&huart2, x, y, quality, distance, distance_fresh);
 	  }
 
 	  if (now - last_distance_ms >= DISTANCE_PERIOD_MS) {
-		  uint16_t new_distance = 0U;
-		  uint16_t published_distance = 0U;
-		  uint8_t using_bootstrap = 0U;
 		  last_distance_ms = now;
-
-		  if (vl53_ok) {
-			  VL53ReadResult read_result = vl53_GetDistance(&new_distance);
-
-			  if (VL53GroundBootstrap_Update(&range_bootstrap,
-			                                 read_result,
-			                                 new_distance,
-			                                 &published_distance,
-			                                 &using_bootstrap) != 0U) {
-				  VL53RangeMode published_mode =
-				      (using_bootstrap != 0U) ? VL53_RANGE_BOOTSTRAP : VL53_RANGE_REAL_FLIGHT;
-
-				  distance = published_distance;
-				  has_distance = 1U;
-				  last_distance_update_ms = HAL_GetTick();
-				  send_distance_sensor(&huart2, distance);
-
-				  if ((announced_range_mode_valid == 0U) ||
-				      (published_mode != announced_range_mode)) {
-					  announced_range_mode = published_mode;
-					  announced_range_mode_valid = 1U;
-					  send_status_text(&huart2,
-					                   MAV_SEVERITY_INFO,
-					                   (published_mode == VL53_RANGE_BOOTSTRAP) ?
-					                       "VL53 ground bootstrap V3 5cm" :
-					                       "VL53 real range active");
-				  }
+		  if (range_init_error == NULL && hl5300_read_distance(&hi2c2, &distance)) {
+			  const uint8_t first_range = (has_distance == 0U);
+			  has_distance = 1U;
+			  last_distance_update_ms = HAL_GetTick();
+			  send_distance_sensor(&huart2, distance);
+			  if (first_range != 0U) {
+				  send_status_text(&huart2, MAV_SEVERITY_INFO, "HL5300 range active");
 			  }
 		  }
 	  }

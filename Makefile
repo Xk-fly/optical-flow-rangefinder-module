@@ -62,6 +62,8 @@ $(BUILD_DIR)/%.hex: $(BUILD_DIR)/%.elf
 $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf
 	$(CP) -O binary -S $< $@
 
+$(BUILD_DIR)/Core/Src/HL5300/hl5300_firmware.o: Core/Src/HL5300/hl5300_firmware.blob
+
 clean:
 	rm -rf $(BUILD_DIR)
 
